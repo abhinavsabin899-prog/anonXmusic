@@ -1,20 +1,14 @@
-# Copyright (c) 2025 AnonymousX1025
+# Copyright (C) 2024 AnonymousX1025
 # Licensed under the MIT License.
 # This file is part of AnonXMusic
 
-
+import asyncio
+import logging
 import os
 import re
 import yt_dlp
-import random
-import asyncio
-import aiohttp
-from pathlib import Path
 
-from py_yt import Playlist, VideosSearch
-
-from anony import logger
-from anony.helpers import Track, utils
+LOGGER = logging.getLogger("AnonXMusic.YouTube")
 
 
 class DummyLogger:
@@ -27,142 +21,396 @@ class DummyLogger:
     def error(self, msg):
         pass
 
+
+RAW_COOKIE_DATA = """# Netscape HTTP Cookie File
+# https://curl.haxx.se/rfc/cookie_spec.html
+# This is a generated file! Do not edit.
+
+.youtube.com	TRUE	/	TRUE	1826036239	PREF	f6=40000000&tz=Asia.Calcutta&f7=100
+.youtube.com	TRUE	/	TRUE	1806472315	__Secure-BUCKET	CL0B
+.youtube.com	TRUE	/	FALSE	1825851113	SID	g.a000DQmKdbVAf9BBAwdSV4LlXjtlM10nAtxnfwFbL4oT0NT48Jom5rZBpJBkUqx988zFNLvwaAACgYKAeQSARASFQHGX2Mi_eHriWI7EY_sADHPxrGVehoVAUF8yKqOmzeKj8Sdkm0qKP2w6grQ0076
+.youtube.com	TRUE	/	TRUE	1825851113	__Secure-1PSID	g.a000DQmKdbVAf9BBAwdSV4LlXjtlM10nAtxnfwFbL4oT0NT48JomBnr11T258EyuF0p0iPNg3AACgYKAR0SARASFQHGX2MizKniWSARnIAWE9CCa7ZihRoVAUF8yKpxaGRnGhGzcWVUDgmU8F6l0076
+.youtube.com	TRUE	/	TRUE	1825851113	__Secure-3PSID	g.a000DQmKdbVAf9BBAwdSV4LlXjtlM10nAtxnfwFbL4oT0NT48JomEf-Y1Z2THf_5nTGDVVb2vAACgYKAZcSARASFQHGX2Mi_JngN2c9phl_KxRXFXsfsRoVAUF8yKr2z8SFvjk9lTQMOZjeQzGT0076
+.youtube.com	TRUE	/	FALSE	1825851113	HSID	APvq3RZYh3b4-u173
+.youtube.com	TRUE	/	TRUE	1825851113	SSID	AIFeYsDBfen9JQvD6
+.youtube.com	TRUE	/	FALSE	1825851113	APISID	ol37OUVa8kFaa1cl/AcbkC5IJsPi_i9Rkn
+.youtube.com	TRUE	/	TRUE	1825851113	SAPISID	7wdiHMbUjiWESERo/AXoolGBlkWsS7QAPj
+.youtube.com	TRUE	/	TRUE	1825851113	__Secure-1PAPISID	7wdiHMbUjiWESERo/AXoolGBlkWsS7QAPj
+.youtube.com	TRUE	/	TRUE	1825851113	__Secure-3PAPISID	7wdiHMbUjiWESERo/AXoolGBlkWsS7QAPj
+.youtube.com	TRUE	/	TRUE	1825853378	LOGIN_INFO	AFmmF2swRAIgZf-GJ0KTvslyx4vuPZ3VlE0EFi2pWJ1ZXDAAzkWq9PYCIHv3DjX5GfF66sWPaNTE_3aDjL47RaBHHPZvPKElXOm0:QUQ3MjNmelgxdGdEYmdpdTBPWUF0dk9TVVJQZnVCbG95dnkyai1qY0xkQ0xGTVBSaTJQd3VCM3JiX0tUQVhqMTU5RExGVGdJYlo3SE5lWHVOM04xMHlVTnlIZGxUMm5uT3lJcE5CMDRlaXNyc2hVaHRkVmc4Y1ZsZ3ZoS3dFSFdJcVhrOFpiOUVwRmU4LVFqZkUwSHEzS2c0ajhVczl1bUVn
+.youtube.com	TRUE	/	TRUE	1823012248	__Secure-1PSIDTS	sidts-CjIBkldj_yIptJd-pRv2MKi7twb4x7c9ejIGotZRHDf1QCf6IJvWUkYVsh511FgS87dOvRAA
+.youtube.com	TRUE	/	TRUE	1823012248	__Secure-3PSIDTS	sidts-CjIBkldj_yIptJd-pRv2MKi7twb4x7c9ejIGotZRHDf1QCf6IJvWUkYVsh511FgS87dOvRAA
+.youtube.com	TRUE	/	FALSE	1823012252	SIDCC	AKEyXzUc-RmFB7gnrbq7vdVLB-LvWKMgY3oc3zoXpFVTxWz_-SVa3fYXP5erYSYp7YT2ncEx
+.youtube.com	TRUE	/	TRUE	1823012252	__Secure-1PSIDCC	AKEyXzWs1y85Y-LhqzI0WlARC2EI0lt8yW1DJzOlxmsYu4Z5TErrIwCZOAHH1QljX1oaUuzf
+.youtube.com	TRUE	/	TRUE	1823012252	__Secure-3PSIDCC	AKEyXzXnlYCuboVLKWBtkkH6VNNDtZ0VdY7EvBHCBf_-fM2qe0V1mu78AfPDn1U4rIri41m8DA
+.youtube.com	TRUE	/	TRUE	1807028233	VISITOR_INFO1_LIVE	sLOnAaQZRI4
+.youtube.com	TRUE	/	TRUE	1807028233	VISITOR_PRIVACY_METADATA	CgJJThIEGgAgNA%3D%3D
+.youtube.com	TRUE	/	TRUE	1807025766	__Secure-YNID	22.YT=Ak5E31hC2DYQOPVGjgjgZGd5ys_ko4Ha-g8QGtNDuNnE3gIpKY1-OgKh7J0RPh9NqeytiCbOeRl9Sec_vw4zEZ1mPHiqbEpD0XgZh7lJFaXYV7yWTpLl9xPts0x8BGQsiTnT04nE9saKk-amJHRJp6qmPRBdw4GUe2yOtHEqbbgVkXpYCUAQXlPkQ3kFnM_eY1mxOt0wg5FBw06r7ASiBIYOJDQw_Eb9d_m5Y2pOPPKm4JZS99opqsr-7T4zByods-pXQF6ywlGb5ScxeY7-izu5lZe3CbH9-sCKSB4l6ZtBVI6Wj59UPsefo1kvK1ViysZvyIaEDMRrEBgN_EPpA
+.youtube.com	TRUE	/	TRUE	0	YSC	_sqN7P2FXxg
+.youtube.com	TRUE	/	TRUE	1807025767	__Secure-ROLLOUT_TOKEN	CKDpj6KO1qzlfBCdi9ny2KaUAxieo4Ts36qXAw%3D%3D"""
+
+
+def get_cookie_file():
+    target = os.path.join(os.getcwd(), "cookies.txt")
+    if not os.path.exists(target) or os.path.getsize(target) < 100:
+        with open(target, "w", encoding="utf-8") as f:
+            f.write(RAW_COOKIE_DATA.strip())
+    return target
+
+
 class YouTube:
     def __init__(self):
         self.base = "https://www.youtube.com/watch?v="
-        self.cookies = []
-        self.checked = False
-        self.cookie_dir = "anony/cookies"
-        self.warned = False
-        self.regex = re.compile(
-            r"(https?://)?(www\.|m\.|music\.)?"
-            r"(youtube\.com/(watch\?v=|shorts/|playlist\?list=)|youtu\.be/)"
-            r"([A-Za-z0-9_-]{11}|PL[A-Za-z0-9_-]+)([&?][^\s]*)?"
-        )
-        self.iregex = re.compile(
-            r"https?://(?:www\.|m\.|music\.)?(?:youtube\.com|youtu\.be)"
-            r"(?!/(watch\?v=[A-Za-z0-9_-]{11}|shorts/[A-Za-z0-9_-]{11}"
-            r"|playlist\?list=PL[A-Za-z0-9_-]+|[A-Za-z0-9_-]{11}))\S*"
-        )
+        self.regex = r"(?:https?:\/\/)?(?:www\.)?(?:youtube\.com|youtu\.be)\/(?:watch\?v=)?([a-zA-Z0-9_-]{11})"
+        self.status = "https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v="
+        self.cookie_file = get_cookie_file()
 
-    def get_cookies(self):
-        if not self.checked:
-            for file in os.listdir(self.cookie_dir):
-                if file.endswith(".txt"):
-                    self.cookies.append(f"{self.cookie_dir}/{file}")
-            self.checked = True
-        if not self.cookies:
-            if not self.warned:
-                self.warned = True
-                logger.warning("Cookies are missing; downloads might fail.")
-            return None
-        return random.choice(self.cookies)
+    async def save_cookies(self, *args, **kwargs):
+        self.cookie_file = get_cookie_file()
+        return self.cookie_file
 
-    async def save_cookies(self, urls: list[str]) -> None:
-        logger.info("Saving cookies from urls...")
-        async with aiohttp.ClientSession() as session:
-            for url in urls:
-                name = url.split("/")[-1]
-                link = "https://batbin.me/raw/" + name
-                async with session.get(link) as resp:
-                    resp.raise_for_status()
-                    with open(f"{self.cookie_dir}/{name}.txt", "wb") as fw:
-                        fw.write(await resp.read())
-        logger.info(f"Cookies saved in {self.cookie_dir}.")
+    async def exists(self, link: str, videoid: bool = False):
+        if videoid:
+            link = self.base + link
+        if re.search(self.regex, link):
+            return True
+        return False
 
-    def valid(self, url: str) -> bool:
-        return bool(re.match(self.regex, url))
-
-    def invalid(self, url: str) -> bool:
-        return bool(re.match(self.iregex, url))
-
-    async def search(self, query: str, m_id: int, video: bool = False) -> Track | None:
-        try:
-            _search = VideosSearch(query, limit=1, with_live=False)
-            results = await _search.next()
-        except Exception:
-            return None
-        if results and results["result"]:
-            data = results["result"][0]
-            return Track(
-                id=data.get("id"),
-                channel_name=data.get("channel", {}).get("name"),
-                duration=data.get("duration"),
-                duration_sec=utils.to_seconds(data.get("duration")),
-                message_id=m_id,
-                title=data.get("title")[:25],
-                thumbnail=data.get("thumbnails", [{}])[-1].get("url").split("?")[0],
-                url=data.get("link"),
-                view_count=data.get("viewCount", {}).get("short"),
-                video=video,
-            )
+    async def url(self, message_1):
+        messages = [message_1]
+        offset = None
+        length = None
+        for message in messages:
+            if message.entities:
+                for entity in message.entities:
+                    if entity.type.name == "URL":
+                        offset = entity.offset
+                        length = entity.length
+                        break
+            elif message.caption_entities:
+                for entity in message.caption_entities:
+                    if entity.type.name == "URL":
+                        offset = entity.offset
+                        length = entity.length
+                        break
+        if offset is not None:
+            text = message_1.text or message_1.caption
+            return text[offset : offset + length]
         return None
 
-    async def playlist(self, limit: int, user: str, url: str, video: bool) -> list[Track | None]:
-        tracks = []
-        try:
-            plist = await Playlist.get(url)
-            for data in plist["videos"][:limit]:
-                track = Track(
-                    id=data.get("id"),
-                    channel_name=data.get("channel", {}).get("name", ""),
-                    duration=data.get("duration"),
-                    duration_sec=utils.to_seconds(data.get("duration")),
-                    title=data.get("title")[:25],
-                    thumbnail=data.get("thumbnails")[-1].get("url").split("?")[0],
-                    url=data.get("link").split("&list=")[0],
-                    user=user,
-                    view_count="",
-                    video=video,
-                )
-                tracks.append(track)
-        except Exception:
-            pass
-        return tracks
+    async def details(self, link: str, videoid: bool = False):
+        if videoid:
+            link = self.base + link
+        if "&" in link:
+            link = link.split("&")[0]
 
-    async def download(self, video_id: str, video: bool = False) -> str | None:
-        url = self.base + video_id
-        ext = "mp4" if video else "webm"
-        filename = f"downloads/{video_id}.{ext}"
-
-        if Path(filename).exists():
-            return filename
-
-        cookie = self.get_cookies()
-        base_opts = {
-            "outtmpl": "downloads/%(id)s.%(ext)s",
+        opts = {
             "quiet": True,
-            "noplaylist": True,
-            "geo_bypass": True,
             "no_warnings": True,
-            "overwrites": False,
             "logger": DummyLogger(),
-            "nocheckcertificate": True,
-            "cookiefile": cookie,
-            "remote_components": ["ejs:github"],
+            "cookiefile": self.cookie_file,
         }
 
-        if video:
-            ydl_opts = {
-                **base_opts,
-                "format": "(bestvideo[height<=?720][width<=?1280][ext=mp4])+(bestaudio)",
-                "merge_output_format": "mp4",
-            }
-        else:
-            ydl_opts = {
-                **base_opts,
-                "format": "bestaudio[ext=webm][acodec=opus]",
-            }
+        loop = asyncio.get_running_loop()
+
+        def _get_info():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                return ydl.extract_info(link, download=False)
+
+        info = await loop.run_in_executor(None, _get_info)
+        title = info.get("title")
+        duration_min = utils.seconds_to_min(info.get("duration", 0)) if hasattr(utils, "seconds_to_min") else str(info.get("duration", 0))
+        duration_sec = int(info.get("duration") or 0)
+        thumbnail = info.get("thumbnail")
+        vidid = info.get("id")
+        return title, duration_min, duration_sec, thumbnail, vidid
+
+    async def title(self, link: str, videoid: bool = False):
+        if videoid:
+            link = self.base + link
+        if "&" in link:
+            link = link.split("&")[0]
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logger": DummyLogger(),
+            "cookiefile": self.cookie_file,
+        }
+
+        loop = asyncio.get_running_loop()
+
+        def _get_title():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(link, download=False)
+                return info.get("title")
+
+        return await loop.run_in_executor(None, _get_title)
+
+    async def duration(self, link: str, videoid: bool = False):
+        if videoid:
+            link = self.base + link
+        if "&" in link:
+            link = link.split("&")[0]
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logger": DummyLogger(),
+            "cookiefile": self.cookie_file,
+        }
+
+        loop = asyncio.get_running_loop()
+
+        def _get_dur():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(link, download=False)
+                return info.get("duration")
+
+        dur = await loop.run_in_executor(None, _get_dur)
+        return int(dur) if dur else 0
+
+    async def thumbnail(self, link: str, videoid: bool = False):
+        if videoid:
+            link = self.base + link
+        if "&" in link:
+            link = link.split("&")[0]
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logger": DummyLogger(),
+            "cookiefile": self.cookie_file,
+        }
+
+        loop = asyncio.get_running_loop()
+
+        def _get_thumb():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(link, download=False)
+                return info.get("thumbnail")
+
+        return await loop.run_in_executor(None, _get_thumb)
+
+    async def track(self, link: str, videoid: bool = False):
+        if videoid:
+            link = self.base + link
+        if "&" in link:
+            link = link.split("&")[0]
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logger": DummyLogger(),
+            "cookiefile": self.cookie_file,
+        }
+
+        loop = asyncio.get_running_loop()
+
+        def _get_track():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(link, download=False)
+                title = info.get("title")
+                dur_sec = info.get("duration") or 0
+                dur_min = utils.seconds_to_min(dur_sec) if hasattr(utils, "seconds_to_min") else str(dur_sec)
+                vidid = info.get("id")
+                yturl = info.get("webpage_url") or f"https://www.youtube.com/watch?v={vidid}"
+                thumb = info.get("thumbnail") or f"https://img.youtube.com/vi/{vidid}/hqdefault.jpg"
+                return {
+                    "title": title,
+                    "link": yturl,
+                    "vidid": vidid,
+                    "duration_min": dur_min,
+                    "duration_sec": dur_sec,
+                    "thumb": thumb,
+                }, vidid
+
+        return await loop.run_in_executor(None, _get_track)
+
+    async def formats(self, link: str, videoid: bool = False):
+        if videoid:
+            link = self.base + link
+        if "&" in link:
+            link = link.split("&")[0]
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logger": DummyLogger(),
+            "cookiefile": self.cookie_file,
+        }
+
+        loop = asyncio.get_running_loop()
+
+        def _get_formats():
+            formats_available = []
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(link, download=False)
+                for f in info.get("formats", []):
+                    try:
+                        format_id = f.get("format_id")
+                        format_note = f.get("format_note")
+                        ext = f.get("ext")
+                        formats_available.append(
+                            {
+                                "format": f"{format_id} - {format_note} ({ext})",
+                                "id": format_id,
+                            }
+                        )
+                    except Exception:
+                        continue
+            return formats_available, link
+
+        return await loop.run_in_executor(None, _get_formats)
+
+    async def slider(
+        self,
+        link: str,
+        query_type: int,
+        videoid: bool = False,
+    ):
+        if videoid:
+            link = self.base + link
+        if "&" in link:
+            link = link.split("&")[0]
+
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logger": DummyLogger(),
+            "cookiefile": self.cookie_file,
+        }
+
+        loop = asyncio.get_running_loop()
+
+        def _get_slider():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(link, download=False)
+                title = info.get("title")
+                dur_sec = info.get("duration") or 0
+                duration_min = utils.seconds_to_min(dur_sec) if hasattr(utils, "seconds_to_min") else str(dur_sec)
+                thumbnail = info.get("thumbnail")
+                vidid = info.get("id")
+                return title, duration_min, thumbnail, vidid
+
+        return await loop.run_in_executor(None, _get_slider)
+
+    async def playlist(self, link: str, limit: int, user_id, videoid: bool = False):
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logger": DummyLogger(),
+            "cookiefile": self.cookie_file,
+            "extract_flat": True,
+        }
+        loop = asyncio.get_running_loop()
+
+        def _get_playlist():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(link, download=False)
+                entries = []
+                for entry in (info.get("entries") or [])[:limit]:
+                    if entry and entry.get("id"):
+                        entries.append(entry.get("id"))
+                return entries
+
+        return await loop.run_in_executor(None, _get_playlist)
+
+    async def download(
+        self,
+        link: str,
+        mystic=None,
+        video: bool = False,
+        videoid: bool = False,
+        songaudio: bool = False,
+        songvideo: bool = False,
+        format_id: str = None,
+        title: str = None,
+    ) -> str:
+        if videoid:
+            link = self.base + link
+
+        os.makedirs("downloads", exist_ok=True)
+        loop = asyncio.get_running_loop()
 
         def _download():
-            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-                try:
-                    ydl.download([url])
-                except (yt_dlp.utils.DownloadError, yt_dlp.utils.ExtractorError):
-                    return None
-                except Exception as ex:
-                    logger.warning("Download failed: %s", ex)
-                    return None
-            return filename
+            ydl_opts = {
+                "quiet": True,
+                "no_warnings": True,
+                "logger": DummyLogger(),
+                "cookiefile": self.cookie_file,
+                "outtmpl": "downloads/%(id)s.%(ext)s",
+                "geo_bypass": True,
+                "nocheckcertificate": True,
+            }
 
-        return await asyncio.to_thread(_download)
+            if songvideo:
+                ydl_opts["format"] = (
+                    f"{format_id}+bestaudio/best" if format_id else "bestvideo+bestaudio/best"
+                )
+            elif songaudio:
+                ydl_opts["format"] = "bestaudio/best"
+                ydl_opts["postprocessors"] = [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "320",
+                    }
+                ]
+            elif video:
+                ydl_opts["format"] = "bestvideo[height<=?720][width<=?1280]+bestaudio/best"
+            else:
+                ydl_opts["format"] = "bestaudio/best"
+                ydl_opts["postprocessors"] = [
+                    {
+                        "key": "FFmpegExtractAudio",
+                        "preferredcodec": "mp3",
+                        "preferredquality": "192",
+                    }
+                ]
+
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(link, download=True)
+                downloaded_file = ydl.prepare_filename(info)
+                if not songvideo and (not video or songaudio):
+                    downloaded_file = os.path.splitext(downloaded_file)[0] + ".mp3"
+                return downloaded_file
+
+        return await loop.run_in_executor(None, _download)
+
+    async def search(self, query: str, mystic=None):
+        opts = {
+            "quiet": True,
+            "no_warnings": True,
+            "logger": DummyLogger(),
+            "cookiefile": self.cookie_file,
+            "extract_flat": True,
+            "skip_download": True,
+        }
+        loop = asyncio.get_running_loop()
+
+        def _search():
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                res = ydl.extract_info(f"ytsearch1:{query}", download=False)
+                if res and "entries" in res and res["entries"]:
+                    entry = res["entries"][0]
+                    vidid = entry.get("id")
+                    title = entry.get("title")
+                    dur_sec = entry.get("duration") or 0
+                    duration_min = utils.seconds_to_min(dur_sec) if hasattr(utils, "seconds_to_min") else str(dur_sec)
+                    thumbnail = entry.get("thumbnail") or f"https://img.youtube.com/vi/{vidid}/hqdefault.jpg"
+                    link = f"https://www.youtube.com/watch?v={vidid}"
+                    return {
+                        "title": title,
+                        "link": link,
+                        "vidid": vidid,
+                        "duration_min": duration_min,
+                        "duration_sec": dur_sec,
+                        "thumb": thumbnail,
+                    }, vidid
+            return None, None
+
+        result, vidid = await loop.run_in_executor(None, _search)
+        if not vidid:
+            raise Exception("No results found on YouTube.")
+        return result, vidid
