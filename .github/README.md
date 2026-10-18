@@ -20,6 +20,7 @@ Supports YouTube, Spotify, Resso, Apple Music, SoundCloud and M3U8 links.
 <br>
 
 <img src="https://github.com/AnonymousX1025/AnonXMusic/blob/master/.github/anonx.jpg" width="720" height="auto">
+[![Render](https://img.shields.io/badge/Deploy-Render-46E3B7?style=for-the-badge&logo=render&logoColor=black)](https://render.com/deploy?repo=https://github.com/kurukshethrathepride/nekotaku_bot)
 
 AnonXMusic lets you stream high-quality and low-latency audio and video playback into telegram group video chats.<br>
 Built with Python, Pyrogram, and Py-TgCalls, it’s optimized for reliability and easy deployment on Heroku, VPS, or Docker.
