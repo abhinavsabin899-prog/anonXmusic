@@ -1,7 +1,7 @@
 services:
   - type: web
     name: abhi66
-    env: python
+    env: docker
     plan: free
 
     buildCommand: pip3 install --no-cache-dir --upgrade -r requirements.txt
